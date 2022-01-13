@@ -62,37 +62,42 @@ void *abstractor(void *arg)
         pthread_mutex_unlock(&lockAbstractFile);
 
         ifstream abstractFile(abstractResult.abstractFileName);
+        string summary = "";
+        string sentence = "";
         string token;
         set<string> abstractWordSet;
+        set<string> intersectionSet;
+        bool match = false;
         while (abstractFile >> token)
         {
-            if (token != "." || token != "\n")
+            if (token != "." && token != "\n")
             {
+                sentence += " " + token;
+                if (queryWords.count(token) == 1) {
+                    match = true;
+                    intersectionSet.insert(token);
+                }
                 abstractWordSet.insert(token);
             }
-        }
-
-        float intersectionSetSize = 0;
-        set<string>::iterator queryWordsItr, abstractWordSetItr;
-        for (queryWordsItr = queryWords.begin(); queryWordsItr != queryWords.end(); queryWordsItr++)
-        {
-            for (abstractWordSetItr = abstractWordSet.begin(); abstractWordSetItr != abstractWordSet.end(); abstractWordSetItr++)
+            else if (token == ".")
             {
-                if (*queryWordsItr == *abstractWordSetItr)
+                if (match)
                 {
-                    intersectionSetSize++;
-                    break;
+                    summary += sentence + " .";
                 }
+                sentence = "";
+                match = false;
             }
         }
-
-        abstractResult.score = intersectionSetSize / (queryWords.size() + abstractWordSet.size() - intersectionSetSize);
+        summary.erase(summary.begin());
+        abstractResult.summary = summary;
+        abstractWordSet.insert("."); // WHAT THE ACTUAL FUCK?
+        abstractResult.score = float(intersectionSet.size()) / (queryWords.size() + abstractWordSet.size() - intersectionSet.size());
 
         pthread_mutex_lock(&printOutputLock);
-
         if (abstractResult.score > results[N - 1].score)
         {
-            results[N-1] = abstractResult;
+            results[N - 1] = abstractResult;
             for (int i = N - 2; i >= 0; i--)
             {
                 if (results[i].score < abstractResult.score)
@@ -103,7 +108,6 @@ void *abstractor(void *arg)
                 }
             }
         }
-
         pthread_mutex_unlock(&printOutputLock);
     }
 
@@ -145,24 +149,22 @@ int main(int argc, char const *argv[])
     pthread_t threadIds[T];
     for (int i = 0; i < T; i++)
     {
-        threadNames[i] = char (65 + i);
+        threadNames[i] = char(65 + i);
         pthread_create(&threadIds[i], NULL, &abstractor, &threadNames[i]);
     }
-
 
     for (int i = 0; i < T; i++)
     {
         pthread_join(threadIds[i], NULL);
     }
-    printf("###\n"); 
+    printf("###\n");
 
-    for(int i=0; i<N; i++) {
-        printf("Result %d:\n", i+1);
+    for (int i = 0; i < N; i++)
+    {
+        printf("Result %d:\n", i + 1);
         printf("File: %s\n", results[i].abstractFileName.c_str());
         printf("Score: %f\n", results[i].score);
-        // printf("Summary: %s\n", results[i].summary);
+        printf("Summary: %s\n", results[i].summary.c_str());
         printf("###\n");
     }
-
-
 }
